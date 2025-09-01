@@ -23,26 +23,27 @@ export default function ProductInformation() {
   const { productInfo } = router.query;
   const { addToCart, list, count } = useContext(AppContext);
 
-  const fetchProducts = async () => {
-    const API_URL = "https://kasuwa-b671.onrender.com";
-    try {
-      const productData = await fetch(
-        `${API_URL}/products/product/${productInfo}`
-      );
-      const productDataRes = await productData.json();
-      setProduct(productDataRes);
-      setIsLoading(false); // Set isLoading to false after data is fetched
-    } catch (error) {
-      console.log(error);
-      setIsLoading(false); // Set isLoading to false on error
-    }
-  };
-  console.log(product);
   useEffect(() => {
+    const fetchProducts = async () => {
+      const API_URL = "https://kasuwa-b671.onrender.com";
+      try {
+        const productData = await fetch(
+          `${API_URL}/products/product/${productInfo}`
+        );
+        const productDataRes = await productData.json();
+        setProduct(productDataRes);
+        setIsLoading(false);
+      } catch (error) {
+        console.log(error);
+        setIsLoading(false);
+      }
+    };
+
     if (router.isReady) {
       fetchProducts();
     }
-  }, [productInfo,router.isReady]);
+  }, [router.isReady, productInfo]);
+
 
   const checkStock = () => {
     if (product) {
@@ -59,7 +60,7 @@ export default function ProductInformation() {
   return (
     <div>
       {isLoading ? ( // Show skeleton loading component while data is being fetched
-       <ProductSkeletonLoader/>
+        <ProductSkeletonLoader />
       ) : product ? (
         <div className="py-8">
           <div className="bg-transparent sm:w-[90%] w-full flex flex-col gap-6 shadow-none rounded-none mx-auto px-6">
@@ -98,7 +99,6 @@ export default function ProductInformation() {
                       addToCart(product, 1);
                     }}
                   >
-                    
                     <span>Add to cart</span>
                   </Button>
                 </div>
@@ -107,16 +107,13 @@ export default function ProductInformation() {
             <div className="flex flex-col gap-3 bg-white sm:p-8 p-3">
               <h2 className="text-2xl font-semibold mb-2">Products Details</h2>
               <div>
-                <p>{product.description}</p> 
+                <p>{product.description}</p>
               </div>
-             
             </div>
           </div>
-<div className="max-w-[1280px] px-6 mx-auto py-6">
-  <span className="font-semibold text-xl">
-    RELATED PRODUCTS
-  </span>
-</div>
+          <div className="max-w-[1280px] px-6 mx-auto py-6">
+            <span className="font-semibold text-xl">RELATED PRODUCTS</span>
+          </div>
           <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] justify-between w-full gap-x-[1.50rem] gap-y-4  max-w-[1280px] px-6 py-8 pt-3 mx-auto">
             {list &&
               list
@@ -133,12 +130,12 @@ export default function ProductInformation() {
                       saleScale: string;
                       title: string;
                       _id: string;
-                      stock:string
+                      stock: string;
                     },
                     index: number
                   ) => (
                     <ProductCard
-                    stock={items.stock}
+                      stock={items.stock}
                       _id={items._id}
                       item={items}
                       key={index}

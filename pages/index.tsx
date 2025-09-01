@@ -29,6 +29,7 @@ import googleplay from "../public/google play.svg";
 import Footer from "@/components/footer";
 import SkeletonLoading from "@/components/skeletonLoading";
 import { title } from "process";
+
 interface card {
   images: any;
   index: number;
@@ -39,11 +40,180 @@ interface card {
 
 export default function Home() {
   const { cartItems, list, count } = useContext(AppContext);
-  const date = new Date();
-  const seconds = date.getSeconds();
-  const hours = date.getHours();
-  const days = date.getDay();
-  const minutes = date.getMinutes();
+
+  // Countdown state
+  const [countdown, setCountdown] = useState({
+    days: 0,
+    hours: 0,
+    minutes: 0,
+    seconds: 0,
+  });
+
+  // Flash sale countdown state
+  const [flashSaleCountdown, setFlashSaleCountdown] = useState({
+    hours: 0,
+    minutes: 0,
+    seconds: 0,
+  });
+
+  // Check if countdown is urgent (less than 10 minutes)
+  const isCountdownUrgent = countdown.hours === 0 && countdown.minutes < 10;
+  const isFlashSaleUrgent =
+    flashSaleCountdown.hours === 0 && flashSaleCountdown.minutes < 10;
+
+  // Countdown completion states
+  const [isMainCountdownComplete, setIsMainCountdownComplete] = useState(false);
+  const [isFlashSaleComplete, setIsFlashSaleComplete] = useState(false);
+
+  // Countdown pause/resume state
+  const [isPaused, setIsPaused] = useState(false);
+  const [pausedTime, setPausedTime] = useState(0);
+
+  // Countdown settings state
+  const [showSettings, setShowSettings] = useState(false);
+  const [countdownDuration, setCountdownDuration] = useState(24); // hours
+  const [flashSaleDuration, setFlashSaleDuration] = useState(6); // hours
+
+  // Countdown reset function
+  const resetCountdown = () => {
+    const newEndTime = new Date();
+    newEndTime.setHours(newEndTime.getHours() + 24);
+
+    const newFlashSaleEndTime = new Date();
+    newFlashSaleEndTime.setHours(newFlashSaleEndTime.getHours() + 6);
+
+    // Reset completion states
+    setIsMainCountdownComplete(false);
+    setIsFlashSaleComplete(false);
+
+    // Force re-render by updating end times
+    window.location.reload();
+  };
+
+  // Pause countdown
+  const pauseCountdown = () => {
+    setIsPaused(true);
+    setPausedTime(Date.now());
+  };
+
+  // Resume countdown
+  const resumeCountdown = () => {
+    setIsPaused(false);
+    setPausedTime(0);
+  };
+
+  // Play countdown sound effect
+  const playCountdownSound = () => {
+    if (typeof window !== "undefined" && "AudioContext" in window) {
+      const audioContext = new (window as any).AudioContext();
+      const oscillator = audioContext.createOscillator();
+      const gainNode = audioContext.createGain();
+
+      oscillator.connect(gainNode);
+      gainNode.connect(audioContext.destination);
+
+      oscillator.frequency.setValueAtTime(800, audioContext.currentTime);
+      gainNode.gain.setValueAtTime(0.1, audioContext.currentTime);
+
+      oscillator.start();
+      oscillator.stop(audioContext.currentTime + 0.1);
+    }
+  };
+
+  // Save countdown end times to localStorage
+  const saveCountdownTimes = (mainEndTime: Date, flashEndTime: Date) => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem(
+        "mainCountdownEnd",
+        mainEndTime.getTime().toString()
+      );
+      localStorage.setItem("flashSaleEnd", flashEndTime.getTime().toString());
+    }
+  };
+
+  // Load countdown end times from localStorage
+  const loadCountdownTimes = () => {
+    if (typeof window !== "undefined") {
+      const mainEnd = localStorage.getItem("mainCountdownEnd");
+      const flashEnd = localStorage.getItem("flashSaleEnd");
+
+      if (mainEnd && flashEnd) {
+        return {
+          mainEndTime: new Date(parseInt(mainEnd)),
+          flashEndTime: new Date(parseInt(flashEnd)),
+        };
+      }
+    }
+    return null;
+  };
+
+  useEffect(() => {
+    // Try to load existing countdown times from localStorage
+    const savedTimes = loadCountdownTimes();
+
+    // Set end time for main countdown (24 hours from now)
+    let endTime = new Date();
+    endTime.setHours(endTime.getHours() + 24);
+
+    // Set end time for flash sale (6 hours from now)
+    let flashSaleEndTime = new Date();
+    flashSaleEndTime.setHours(flashSaleEndTime.getHours() + 6);
+
+    // Use saved times if they exist and are in the future
+    if (savedTimes) {
+      const now = new Date().getTime();
+      if (savedTimes.mainEndTime.getTime() > now) {
+        endTime = savedTimes.mainEndTime;
+      }
+      if (savedTimes.flashEndTime.getTime() > now) {
+        flashSaleEndTime = savedTimes.flashEndTime;
+      }
+    }
+
+    // Save the current end times
+    saveCountdownTimes(endTime, flashSaleEndTime);
+
+    const timer = setInterval(() => {
+      const now = new Date().getTime();
+
+      // Main countdown
+      const mainDistance = endTime.getTime() - now;
+      if (mainDistance > 0) {
+        setCountdown({
+          days: Math.floor(mainDistance / (1000 * 60 * 60 * 24)),
+          hours: Math.floor(
+            (mainDistance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)
+          ),
+          minutes: Math.floor((mainDistance % (1000 * 60 * 60)) / (1000 * 60)),
+          seconds: Math.floor((mainDistance % (1000 * 60)) / 1000),
+        });
+        setIsMainCountdownComplete(false);
+
+        // Play sound when countdown becomes urgent
+        if (mainDistance <= 600000 && mainDistance > 599000) {
+          // Last 10 minutes
+          playCountdownSound();
+        }
+      } else {
+        setIsMainCountdownComplete(true);
+      }
+
+      // Flash sale countdown
+      const flashDistance = flashSaleEndTime.getTime() - now;
+      if (flashDistance > 0) {
+        setFlashSaleCountdown({
+          hours: Math.floor(flashDistance / (1000 * 60 * 60)),
+          minutes: Math.floor((flashDistance % (1000 * 60 * 60)) / (1000 * 60)),
+          seconds: Math.floor((flashDistance % (1000 * 60)) / 1000),
+        });
+        setIsFlashSaleComplete(false);
+      } else {
+        setIsFlashSaleComplete(true);
+      }
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, []);
 
   return (
     <div className="mx-auto flex flex-col w-full">
@@ -137,32 +307,73 @@ export default function Home() {
                 </p>
               </div>
               <div className="flex gap-2 text-black flex-wrap sm:flex-nowrap">
-                <div className="flex flex-col justify-center items-center bg-white rounded-full w-[52px] h-[52px] pb-[6px] leading-[16px]">
-                  <span suppressHydrationWarning className="font-semibold">
-                    {hours}
+                <div
+                  className={`flex flex-col justify-center items-center bg-white rounded-full w-[52px] h-[52px] pb-[6px] leading-[16px] shadow-lg hover:scale-105 transition-transform duration-200 ${
+                    isCountdownUrgent ? "animate-pulse bg-red-100" : ""
+                  }`}
+                >
+                  <span suppressHydrationWarning className="font-bold text-lg">
+                    {countdown.days}
                   </span>
-                  <span className="text-[11px]">Hours</span>
+                  <span className="text-[11px] font-medium">Days</span>
                 </div>
-                <div className="flex flex-col justify-center items-center bg-white rounded-full w-[52px] h-[52px] pb-[6px] leading-[16px]">
-                  <span suppressHydrationWarning className="font-semibold">
-                    {days}
+                <div
+                  className={`flex flex-col justify-center items-center bg-white rounded-full w-[52px] h-[52px] pb-[6px] leading-[16px] shadow-lg hover:scale-105 transition-transform duration-200 ${
+                    isCountdownUrgent ? "animate-pulse bg-red-100" : ""
+                  }`}
+                >
+                  <span suppressHydrationWarning className="font-bold text-lg">
+                    {countdown.hours}
                   </span>
-                  <span className="text-[11px]">Days</span>
+                  <span className="text-[11px] font-medium">Hours</span>
                 </div>
-                <div className="flex flex-col justify-center items-center bg-white rounded-full w-[52px] h-[52px] pb-[6px] leading-[16px]">
-                  <span suppressHydrationWarning className="font-semibold">
-                    {minutes}
+                <div
+                  className={`flex flex-col justify-center items-center bg-white rounded-full w-[52px] h-[52px] pb-[6px] leading-[16px] shadow-lg hover:scale-105 transition-transform duration-200 ${
+                    isCountdownUrgent ? "animate-pulse bg-red-100" : ""
+                  }`}
+                >
+                  <span suppressHydrationWarning className="font-bold text-lg">
+                    {countdown.minutes}
                   </span>
-                  <span className="text-[11px]">Minutes</span>
+                  <span className="text-[11px] font-medium">Minutes</span>
                 </div>
-                <div className="flex flex-col justify-center items-center bg-white rounded-full w-[52px] h-[52px] pb-[6px] leading-[16px]">
-                  <span suppressHydrationWarning className="font-semibold">
-                    {" "}
-                    {seconds}
+                <div
+                  className={`flex flex-col justify-center items-center bg-white rounded-full w-[52px] h-[52px] pb-[6px] leading-[16px] shadow-lg hover:scale-105 transition-transform duration-200 ${
+                    isCountdownUrgent ? "animate-pulse bg-red-100" : ""
+                  }`}
+                >
+                  <span suppressHydrationWarning className="font-bold text-lg">
+                    {countdown.seconds}
                   </span>
-                  <span className="text-[11px]">Seconds</span>
+                  <span className="text-[11px] font-medium">Seconds</span>
                 </div>
               </div>
+              <div className="w-full bg-gray-200 rounded-full h-2 mt-3">
+                <div
+                  className="bg-[#38B419] h-2 rounded-full transition-all duration-1000 ease-out"
+                  style={{
+                    width: `${Math.max(
+                      0,
+                      Math.min(
+                        100,
+                        ((24 * 60 * 60 -
+                          (countdown.hours * 60 * 60 +
+                            countdown.minutes * 60 +
+                            countdown.seconds)) /
+                          (24 * 60 * 60)) *
+                          100
+                      )
+                    )}%`,
+                  }}
+                ></div>
+              </div>
+              {isMainCountdownComplete && (
+                <div className="mt-3 p-3 bg-green-100 border border-green-400 text-green-700 rounded-md text-center">
+                  <span className="font-semibold">
+                    🎉 Countdown Complete! Special offer has ended.
+                  </span>
+                </div>
+              )}
               <Button
                 radius="sm"
                 className="bg-[#38B419] w-[100px] py-3 px-6  text-xs text-white"
@@ -206,14 +417,14 @@ export default function Home() {
                 originalPrice: string;
                 saleScale: string;
                 title: string;
-                _id:string
-                stock:string
+                _id: string;
+                stock: string;
               },
               index: number
             ) => (
               <ProductCard
-              stock={items.stock}
-              _id={items._id}
+                stock={items.stock}
+                _id={items._id}
                 item={items}
                 key={index}
                 src={items.images[0].url}
@@ -235,17 +446,27 @@ export default function Home() {
             <span className=" whitespace-nowrap">Flash Sales</span>
           </div>
           <div className="text-2xl flex justify-center items-center scroll-element">
-            <p className="gap-2 flex">
-              TimeLeft:
-              <span suppressHydrationWarning className="font-semibold">
-                {hours}h
-              </span>
-              <span suppressHydrationWarning className="font-semibold">
-                {minutes}m
-              </span>
-              <span suppressHydrationWarning className="font-semibold">
-                {seconds}s
-              </span>
+            <p className="gap-2 flex items-center">
+              <span className="text-sm font-medium">Time Left:</span>
+              <div
+                className={`flex gap-1 px-3 py-1 rounded-lg ${
+                  isFlashSaleUrgent
+                    ? "bg-red-500 animate-pulse"
+                    : "bg-[#38B419]"
+                }`}
+              >
+                <span suppressHydrationWarning className="font-bold text-white">
+                  {flashSaleCountdown.hours.toString().padStart(2, "0")}
+                </span>
+                <span className="text-white">:</span>
+                <span suppressHydrationWarning className="font-bold text-white">
+                  {flashSaleCountdown.minutes.toString().padStart(2, "0")}
+                </span>
+                <span className="text-white">:</span>
+                <span suppressHydrationWarning className="font-bold text-white">
+                  {flashSaleCountdown.seconds.toString().padStart(2, "0")}
+                </span>
+              </div>
             </p>
           </div>
 
@@ -256,7 +477,6 @@ export default function Home() {
         </div>
       </div>
       <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))]  w-full gap-x-[1.50rem] gap-y-4 pt-10 max-w-[1280px] px-6 py-10 mx-auto  ">
-       
         {list && list.length > 0 ? (
           list.slice(3, 8).map(
             (
@@ -266,14 +486,14 @@ export default function Home() {
                 originalPrice: string;
                 saleScale: string;
                 title: string;
-                _id:string
-                stock:string
+                _id: string;
+                stock: string;
               },
               index: number
             ) => (
               <ProductCard
-              stock={items.stock}
-              _id={items._id}
+                stock={items.stock}
+                _id={items._id}
                 item={items}
                 key={index}
                 src={items.images[0].url}
@@ -294,7 +514,7 @@ export default function Home() {
           Most Searched Product
         </span>
         <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))]  w-full gap-x-[1.50rem] justify-between gap-y-4 pt-10 max-w-[1280px] px-6 py-10 mx-auto ">
-          {list&& list.length > 0  ? (
+          {list && list.length > 0 ? (
             list.slice(1, 6).map(
               (
                 items: {
@@ -303,14 +523,14 @@ export default function Home() {
                   originalPrice: string;
                   saleScale: string;
                   title: string;
-                  _id:string;
-                  stock:string
+                  _id: string;
+                  stock: string;
                 },
                 index: number
               ) => (
                 <ProductCard
-                stock={items.stock}
-                _id={items._id}
+                  stock={items.stock}
+                  _id={items._id}
                   item={items}
                   key={index}
                   src={items.images[0].url}
